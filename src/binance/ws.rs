@@ -143,14 +143,27 @@ async fn connect_via_proxy(
 
     // Send HTTP CONNECT
     let connect_req = format!(
-        "CONNECT {target_host}:{target_port} HTTP/1.1\r\nHost: {target_host}:{target_port}\r\n\r\n"
+        "CONNECT {target_host}:{target_port} HTTP/1.1\r\nHost: {target_host}:{target_port}\r\nProxy-Connection: Keep-Alive\r\n\r\n"
     );
     stream.write_all(connect_req.as_bytes()).await?;
 
-    // Read proxy response
-    let mut buf = [0u8; 1024];
-    let n = stream.read(&mut buf).await?;
-    let response = String::from_utf8_lossy(&buf[..n]);
+    // Read proxy response until end of HTTP headers (\r\n\r\n)
+    let mut response_bytes: Vec<u8> = Vec::new();
+    let mut tmp = [0u8; 1];
+    loop {
+        let n = stream.read(&mut tmp).await?;
+        if n == 0 {
+            return Err("Proxy closed connection during CONNECT".into());
+        }
+        response_bytes.push(tmp[0]);
+        if response_bytes.ends_with(b"\r\n\r\n") {
+            break;
+        }
+        if response_bytes.len() > 4096 {
+            return Err("Proxy CONNECT response too large".into());
+        }
+    }
+    let response = String::from_utf8_lossy(&response_bytes);
 
     if !response.contains("200") {
         return Err(format!("Proxy CONNECT failed: {response}").into());
@@ -161,7 +174,9 @@ async fn connect_via_proxy(
     // TLS handshake + WebSocket upgrade over the tunnel
     let request = ws_url.into_client_request()?;
     let connector = tokio_tungstenite::Connector::NativeTls(
-        native_tls::TlsConnector::new()?
+        native_tls::TlsConnector::builder()
+            .danger_accept_invalid_certs(false)
+            .build()?
     );
     let (ws_stream, _) = client_async_tls_with_config(
         request,

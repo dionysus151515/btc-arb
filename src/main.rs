@@ -1,5 +1,6 @@
 mod binance;
 mod config;
+mod feishu;
 mod logger;
 mod monitor;
 mod orderbook;
@@ -78,6 +79,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize CSV logger
     let mut csv_logger = logger::CsvLogger::new("trades.csv")?;
     info!("CSV logger initialized: trades.csv");
+
+    // Initialize Feishu notifier
+    let feishu = config.monitor.feishu_webhook.as_ref().map(|url| {
+        info!("Feishu webhook enabled");
+        feishu::FeishuNotifier::new(url.clone(), config.network.proxy.clone())
+    });
 
     // Start WebSocket connection
     let (tx, mut rx) = mpsc::unbounded_channel();
@@ -159,6 +166,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 match strategy::execute_live_trade(&signal, lt).await {
                     Ok(trade) => {
                         info!("Live trade profit: {:.4} USDT", trade.net_profit_usdt);
+                        if let Some(ref f) = feishu {
+                            let msg = format!(
+                                "[BTC-ARB LIVE] {}\nQty: {:.6} BTC\nBuy: {:.2}  Sell: {:.2}\nNet P&L: {:.4} USDT",
+                                trade.direction, trade.btc_qty,
+                                trade.buy_quote_spent / trade.btc_qty,
+                                trade.sell_quote_received / trade.btc_qty,
+                                trade.net_profit_usdt
+                            );
+                            f.send(&msg).await;
+                        }
                     }
                     Err(e) => {
                         warn!("Live trade skipped: {e}");
@@ -169,6 +186,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     strategy::execute_paper_trade(&signal, &mut paper_trader, &config)
                 {
                     let _ = csv_logger.log_trade(&trade);
+                    if let Some(ref f) = feishu {
+                        let msg = format!(
+                            "[BTC-ARB PAPER] {}\nQty: {:.6} BTC\nBuy: {:.2}  Sell: {:.2}\nGross: {:.4}  Fees: {:.4}  Net: {:.4} USDT",
+                            trade.direction, trade.btc_qty,
+                            trade.buy_price, trade.sell_price,
+                            trade.gross_profit_usdt, trade.fees_usdt, trade.net_profit_usdt
+                        );
+                        f.send(&msg).await;
+                    }
                 }
             }
         }

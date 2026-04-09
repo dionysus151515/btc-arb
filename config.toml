@@ -27,3 +27,4 @@ cooldown_ms = 5000
 
 [monitor]
 refresh_ms = 200
+feishu_webhook = "https://open.feishu.cn/open-apis/bot/v2/hook/fa88c5ca-adc9-4161-a65b-6de57407891e"

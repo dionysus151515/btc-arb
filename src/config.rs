@@ -63,6 +63,7 @@ impl LiveTradingConfig {
 #[derive(Debug, Deserialize)]
 pub struct MonitorConfig {
     pub refresh_ms: u64,
+    pub feishu_webhook: Option<String>,
 }
 
 impl Config {
