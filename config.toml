@@ -1,0 +1,29 @@
+[trading]
+symbols = ["BTCFDUSD", "BTCUSDT"]
+min_profit_bps = 5
+max_trade_usdt = 1000.0
+taker_fee_bps = 10
+fdusd_maker_fee_bps = 0
+
+[paper_trading]
+initial_usdt = 10000.0
+initial_fdusd = 10000.0
+enabled = true
+
+[network]
+proxy = "http://127.0.0.1:7890"
+
+[websocket]
+depth_level = 20
+update_speed_ms = 100
+
+[live_trading]
+enabled = false
+api_key_env = "BINANCE_API_KEY"
+secret_key_env = "BINANCE_SECRET_KEY"
+max_daily_loss_usdt = 50.0
+max_position_btc = 0.01
+cooldown_ms = 5000
+
+[monitor]
+refresh_ms = 200
